@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\DocumentationController;
 use Illuminate\Support\Facades\Route,
+    Illuminate\Support\Facades\Artisan,
     App\Http\Controllers\CategoryController,
     App\Http\Controllers\SubcategoryController,
     App\Http\Controllers\ProductController,
@@ -85,3 +86,9 @@ Route::get('/notification', [NotificationController::class, 'index']);
  * Documentation Route
  */
 Route::get('/docs/{fileName}', [DocumentationController::class, 'show'])->name(DOCUMENTATION);
+
+
+/**
+ * Migration Route
+ */
+Route::get('/migrate', static fn() => Artisan::call('migrate'));
