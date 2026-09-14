@@ -1,0 +1,87 @@
+<?php
+
+use App\Http\Controllers\DocumentationController;
+use Illuminate\Support\Facades\Route,
+    App\Http\Controllers\CategoryController,
+    App\Http\Controllers\SubcategoryController,
+    App\Http\Controllers\ProductController,
+    App\Http\Controllers\HomeController,
+    App\Http\Controllers\ReviewController,
+    App\Http\Controllers\SearchController,
+    App\Http\Controllers\PaymentAboutContactController,
+    App\Http\Controllers\NotificationController;
+
+/*
+|--------------------------------------------------------------------------
+| Web Routes
+|--------------------------------------------------------------------------
+|
+| Here is the registration of the web routes for the Grace application.
+| These routes are loaded by the RouteServiceProvider within a group,
+| which contains the "web" middleware group.
+*/
+
+
+/**
+ * Home Routes
+ */
+Route::get('/', [HomeController::class, 'index'])->name(HOME);
+Route::get('/home', static fn() => to_route(HOME));
+
+
+/**
+ * Categories Route
+ */
+Route::get('/'.CATEGORY_MODEL.'/{slug}', [CategoryController::class, 'index'])->name(CATEGORY_MODEL);
+
+
+/**
+ * Subcategories Route
+ */
+Route::get('/collection/{slug}', [SubcategoryController::class, 'index'])->name(SUBCATEGORY_MODEL);
+
+
+/**
+ * Products Routes
+ */
+Route::controller(ProductController::class)->prefix('/'.PRODUCTS_TABLE)->group(function () {
+    Route::get('/', 'index')->name(PRODUCTS_LIST);
+    Route::get('/{slug}', 'show')->name(PRODUCT_DETAILS);
+});
+
+
+/**
+ * Reviews Route
+ */
+Route::get('/'.REVIEWS_TABLE, [ReviewController::class, 'index'])->name(REVIEWS_TABLE);
+
+
+/**
+ * Payment & About-Us & Contact-Us Routes
+ */
+Route::controller(PaymentAboutContactController::class)->group(function () {
+    Route::get('/'.PAYMENT, PAYMENT)->name(PAYMENT);
+    Route::get('/'.kebabAll(ABOUT_US), capitalizeSecond(ABOUT_US))->name(ABOUT_US);
+    Route::match(['get', 'post'], '/'.kebabAll(CONTACT_US), capitalizeSecond(CONTACT_US))->name(CONTACT_US);
+});
+
+
+/**
+ * Search Routes
+ */
+Route::controller(SearchController::class)->group(function () {
+    searchRoute(SEARCH_PRODUCTS);
+    searchRoute(FILTER_PRODUCTS);
+});
+
+
+/**
+ * Notification Route
+ */
+Route::get('/notification', [NotificationController::class, 'index']);
+
+
+/**
+ * Documentation Route
+ */
+Route::get('/docs/{fileName}', [DocumentationController::class, 'show'])->name(DOCUMENTATION);

@@ -1,0 +1,137 @@
+<?php
+
+namespace App\Services;
+
+use App\Models\Order;
+use App\Models\Review;
+use App\Models\User;
+use Illuminate\Contracts\Foundation\Application;
+use Illuminate\Contracts\View\Factory;
+use Illuminate\Contracts\View\View;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Validation\ValidationException;
+use Psr\SimpleCache\InvalidArgumentException as CacheInvalidArgumentException;
+use Throwable;
+
+class UserService
+{
+    /**
+     * Get all the data of a specified user with relations.
+     *
+     * @return Application|Factory|View|JsonResponse
+     * @throws Throwable
+     */
+    final public function getUserProfile(): Application|Factory|View|JsonResponse
+    {
+        $user_profile_title = auth()->user()?->{FULL_NAME}.' - '.ucfirst(PROFILE);
+        $user               = cache()->remember(USER_MODEL, now()->addMinutes(30), static fn() => User::profileData());
+
+        $user_orders_ids = cache()->remember(USER_ORDERS_PAGINATION_CACHE_KEY, now()->addMinutes(30), function () use ($user) {
+            return $user->{ORDERS_TABLE}()
+                ->pluck(ID)
+                ->toArray();
+        });
+
+        $user_orders = paginateWithFallback(Order::class, $user_orders_ids, 5);
+
+        return request()?->ajax()
+            ? ajaxPaginationResponse($user_orders, PROFILE_ORDERS_PAGINATION, USER_ORDERS, compact(USER_MODEL))
+            : showView(USER_PROFILE_VIEW, compact(USER_MODEL, USER_ORDERS, USER_PROFILE_TITLE));
+    }
+
+    /**
+     * Store or Update a user.
+     *
+     * @param string $operation
+     * @return User
+     * @throws ValidationException|CacheInvalidArgumentException
+     */
+    final public function createOrUpdateUser(string $operation): User
+    {
+        return storeOrUpdateUser($operation);
+    }
+
+    /**
+     * Delete a specified user.
+     *
+     * @param User $user
+     * @return bool
+     * @throws CacheInvalidArgumentException
+     */
+    final public function deleteUser(User $user): bool
+    {
+        $deleted_user = removeDeleteOrRestore($user, $user->{FULL_NAME});
+
+        $this->forgetUserCache($user);
+
+        return $deleted_user;
+    }
+
+    /**
+     * Delete the selected users.
+     *
+     * @param User $users
+     * @return bool
+     * @throws CacheInvalidArgumentException
+     */
+    final public function deleteMultipleUsers(User $users): bool
+    {
+        $deleted_users = removeDeleteOrRestore($users);
+
+        $this->forgetUserCache($users);
+
+        return $deleted_users;
+    }
+
+    /**
+     * Restore a specified user.
+     *
+     * @param User $user
+     * @return bool
+     * @throws CacheInvalidArgumentException
+     */
+    final public function restoreUser(User $user): bool
+    {
+        $restored_user = removeDeleteOrRestore($user, $user->{FULL_NAME});
+
+        $this->forgetUserCache($user);
+
+        return $restored_user;
+    }
+
+    /**
+     * Restore the selected users.
+     *
+     * @param User $users
+     * @return bool
+     * @throws CacheInvalidArgumentException
+     */
+    final public function restoreMultipleUsers(User $users): bool
+    {
+        $restored_users = removeDeleteOrRestore($users);
+
+        $this->forgetUserCache($users);
+
+        return $restored_users;
+    }
+
+    /**
+     * Forget the user cache.
+     *
+     * @param User $user
+     * @return void
+     * @throws CacheInvalidArgumentException
+     */
+    private function forgetUserCache(User $user): void
+    {
+        $user->{REVIEWS_TABLE}()
+            ->withTrashed()
+            ->cursor()
+            ->each(static function (Review $review) {
+                app(ReviewService::class)->forgetCollectionCache($review);
+            });
+
+        forgetCache([USERS_PAGINATION_CACHE_KEY, USER_ADDRESSES_PAGINATION_CACHE_KEY, USER_ORDERS_PAGINATION_CACHE_KEY, USER_MODEL, CUSTOMERS_REVIEWS]);
+    }
+}
+

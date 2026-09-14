@@ -1,0 +1,306 @@
+<?php
+
+namespace App\Services;
+
+use App\Contracts\ServiceData;
+use App\Http\Requests\ProductRequest;
+use App\Models\Product;
+use App\Notifications\NewAdminActionTaken;
+use Illuminate\Contracts\Foundation\Application;
+use Illuminate\Contracts\View\Factory;
+use Illuminate\Contracts\View\View;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Arr;
+use Illuminate\Validation\ValidationException;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Random\RandomException;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
+use Symfony\Component\HttpKernel\Exception\ServiceUnavailableHttpException;
+use Psr\SimpleCache\InvalidArgumentException as CacheInvalidArgumentException;
+use Throwable;
+
+class ProductService implements ServiceData
+{
+    /**
+     * Get the product details.
+     *
+     * @param string $productSlug
+     * @return Application|Factory|View|array|string
+     * @throws Throwable
+     */
+    final public function getProductDetails(string $productSlug): Application|Factory|View|array|string
+    {
+        $product = cache()->remember(PRODUCT_MODEL.'_'.$productSlug, now()->addMinutes(30), static fn() =>
+            Product::query()->with([
+                WISHLISTS_TABLE,
+                REVIEWS_TABLE => static fn(HasMany $reviews) =>
+                    $reviews->whereHas(USER_MODEL, static fn(Builder $user) => $user->withoutTrashed()),
+                SIZES => static fn(HasMany $sizes) =>
+                    $sizes->select(SIZE, PRODUCT_ID),
+            ])
+                ->whereSlug($productSlug)
+                ->withoutTrashed()
+                ->first()
+        );
+
+        if (is_null($product)) {
+            throw new ModelNotFoundException("This ".PRODUCT_MODEL." is not found!");
+        }
+
+        $this->forgetCollectionCache($product);
+
+        $add_cart_product_error = static fn(string $attributeName) => formError(ADD, CART_MODEL, $attributeName);
+
+        if (request()?->ajax()) {
+            return request()?->input(QUICK_VIEW)
+                ? getReviews($product->{ID}) + compact(PRODUCT_MODEL)
+                : view(REVIEWS_COMPONENT, getReviews($product->{ID}) + compact(PRODUCT_MODEL, PRODUCT_MODEL.ucfirst(SLUG)))->render();
+        }
+
+        return showView(USER_PRODUCT_DETAILS_VIEW, getReviews($product->{ID}) + compact(PRODUCT_MODEL, ADD_CART_PRODUCT_ERROR, PRODUCT_MODEL.ucfirst(SLUG)));
+    }
+
+    /**
+     * Store or Update a product
+     * and its images in the database and storage.
+     *
+     * @param string $operation
+     * @return Product
+     * @throws ValidationException|NotFoundHttpException|ServiceUnavailableHttpException|RandomException|CacheInvalidArgumentException
+     */
+    final public function createOrUpdateProduct(string $operation): Product
+    {
+        $product_id             = request()?->input(UPDATE_PRODUCT_ID);
+        $thumb_image_input_name = "{$operation}_".PRODUCT_MODEL."_".THUMB_IMAGE;
+
+        $product_attributes = [
+            NAME,
+            SHORT_DESCRIPTION,
+            LONG_DESCRIPTION,
+            MAIN_IMAGE,
+            RELATED_CATEGORIES,
+            RELATED_SUBCATEGORIES,
+            SIZES,
+            OLD_PRICE,
+            NEW_PRICE,
+            QUANTITY,
+            STATUS,
+        ];
+
+        if (request()?->hasFile($thumb_image_input_name)) {
+            $product_attributes[] = THUMB_IMAGE;
+        }
+
+        $validated_product_request = $this->validateRequest($operation, compact(PRODUCT_ID, PRODUCT_ATTRIBUTES));
+
+        $product = $this->createOrUpdateCollection($validated_product_request, compact('operation', PRODUCT_ID, PRODUCT_ATTRIBUTES, THUMB_IMAGE.'_input_name'));
+
+        $this->forgetCollectionCache($product);
+
+        sendNotificationToAdmins(new NewAdminActionTaken([$product, $product->{NAME}], $operation), true);
+
+        return $product;
+    }
+
+    /**
+     * Delete a specified product
+     * and its images from the database and storage.
+     *
+     * @param Product $product
+     * @return bool
+     * @throws NotFoundHttpException|CacheInvalidArgumentException
+     */
+    final public function deleteProduct(Product $product): bool
+    {
+        $deleted_product = removeDeleteOrRestore($product, $product->{NAME});
+
+        $this->forgetCollectionCache($product);
+
+        return $deleted_product;
+    }
+
+    /**
+     * Delete the selected products
+     * and their images from the database and storage.
+     *
+     * @param Product $products
+     * @return bool
+     * @throws NotFoundHttpException|CacheInvalidArgumentException
+     */
+    final public function deleteMultipleProducts(Product $products): bool
+    {
+        $deleted_products = removeDeleteOrRestore($products);
+
+        $this->forgetCollectionCache($products);
+
+        return $deleted_products;
+    }
+
+    /**
+     * Restore a specified product.
+     *
+     * @param Product $product
+     * @return bool
+     * @throws CacheInvalidArgumentException
+     */
+    final public function restoreProduct(Product $product): bool
+    {
+        $restored_product = removeDeleteOrRestore($product, $product->{NAME});
+
+        $this->forgetCollectionCache($product);
+
+        return $restored_product;
+    }
+
+    /**
+     * Restore the selected products.
+     *
+     * @param Product $products
+     * @return bool
+     * @throws CacheInvalidArgumentException
+     */
+    final public function restoreMultipleProducts(Product $products): bool
+    {
+        $restored_products = removeDeleteOrRestore($products);
+
+        $this->forgetCollectionCache($products);
+
+        return $restored_products;
+    }
+
+    /**
+     * Validate and return the product request.
+     *
+     * @param string $operation
+     * @param array $extra
+     * @return ProductRequest
+     * @throws ValidationException
+     */
+    final public function validateRequest(string $operation, array $extra = []): ProductRequest
+    {
+        $product_request = new ProductRequest($operation, PRODUCT_MODEL, $extra[PRODUCT_ATTRIBUTES]);
+
+        validateAttributes($product_request, $extra[PRODUCT_ID]);
+
+        return $product_request;
+    }
+
+    /**
+     * Create or Update the product.
+     *
+     * @param FormRequest|ProductRequest $collectionRequest
+     * @param array $extra
+     * @return Product|JsonResponse
+     * @throws NotFoundHttpException|ServiceUnavailableHttpException|RandomException
+     */
+    final public function createOrUpdateCollection(FormRequest|ProductRequest $collectionRequest, array $extra): Product|JsonResponse
+    {
+        [$name, $short_description, $long_description, $main_image, $related_categories_ids, $related_subcategories_ids, $sizes, $old_price, $new_price, $quantity, $status] = $extra[PRODUCT_ATTRIBUTES];
+
+        [$name_value, $short_description_value, $long_description_value, $main_image_value, $related_categories_ids_values, $related_subcategories_ids_values, $sizes_values, $old_price_value, $new_price_value, $quantity_value, $status_value] = $collectionRequest->dataValues();
+
+        $main_image_name = storeOrUpdateImage(MAIN_IMAGE, new Product(), $extra[PRODUCT_ID], $main_image_value, checkImageBackgroundRequest());
+
+        $product = Product::query()->updateOrCreate(
+            [ID => $extra[PRODUCT_ID]],
+            [
+                $name              => $name_value,
+                SLUG               => str($name_value)->slug(),
+                $short_description => $short_description_value,
+                $long_description  => $long_description_value,
+                $main_image        => $main_image_name,
+                $old_price         => $old_price_value,
+                $new_price         => $new_price_value,
+                $quantity          => $quantity_value,
+                $status            => $status_value,
+            ]);
+
+        $new_product_id = [PRODUCT_ID => $product->{ID}];
+
+        /*---------------------------- One to Many Relationships ----------------------------*/
+        // Product Thumbnail Images
+        if (Arr::last($extra[PRODUCT_ATTRIBUTES]) === THUMB_IMAGE) {
+            $this->storeThumbImages($product, $new_product_id, $extra[THUMB_IMAGE.'_input_name']);
+        }
+
+        // Product Sizes
+        $sizes_values = array_filter((array) $sizes_values);
+        $this->storeSizes($product, $new_product_id, $sizes_values);
+
+        /*---------------------------- Many to Many Relationships ----------------------------*/
+        // Product Related Categories
+        createOrUpdateMultipleCollections($product, CATEGORIES_TABLE, $related_categories_ids_values);
+
+        // Product Related Subcategories
+        createOrUpdateMultipleCollections($product, SUBCATEGORIES_TABLE, $related_subcategories_ids_values);
+
+        return $product;
+    }
+
+    /**
+     * Forget the product cache.
+     *
+     * @param Model|Product|null $model
+     * @return void
+     * @throws CacheInvalidArgumentException
+     */
+    final public function forgetCollectionCache(Model|Product $model = null): void
+    {
+        forgetCache(PRODUCT_MODEL, $model, SLUG);
+        forgetCache([PRODUCTS_PAGINATION_CACHE_KEY, REVIEWS_PAGINATION_CACHE_KEY, HOME_PRODUCTS, CUSTOMERS_REVIEWS, PRODUCTS_TABLE, WISHLISTS_TABLE.'_'.auth()->id(), CARTS_TABLE.'_'.auth()->id()]);
+    }
+
+    /**
+     * Store the product's thumbnail images.
+     *
+     * @param Product $product
+     * @param array $productAttributes
+     * @param string $inputName
+     * @return void
+     * @throws ServiceUnavailableHttpException|RandomException
+     */
+    private function storeThumbImages(Product $product, array $productAttributes, string $inputName): void
+    {
+        $thumb_images = request()?->file($inputName);
+        $thumb_images_data = array_map(static function (UploadedFile $thumb_image) use ($productAttributes) {
+            $thumb_image_path = "public/images/".PRODUCTS_TABLE.DIRECTORY_SEPARATOR.THUMB_IMAGES_TABLE;
+            $thumb_image_name = time().random_int(10, 100).'.webp';
+
+            checkImageBackgroundRequest() === 'on'
+                ? storeImageWithoutBackground($thumb_image, $thumb_image_path, $thumb_image_name)
+                : $thumb_image->storeAs($thumb_image_path, $thumb_image_name);
+
+            return [
+                THUMB_IMAGE => $thumb_image_name,
+                ...$productAttributes
+            ];
+        }, $thumb_images);
+
+        $product->{THUMB_IMAGES}()->upsert($thumb_images_data, [THUMB_IMAGE, PRODUCT_ID]);
+    }
+
+    /**
+     * Store the product's sizes.
+     *
+     * @param Product $product
+     * @param array $productAttributes
+     * @param array $sizesValues
+     * @return void
+     */
+    private function storeSizes(Product $product, array $productAttributes, array $sizesValues): void
+    {
+        array_walk($sizesValues, static function (&$size_value) use ($productAttributes) {
+            $size_value = [
+                SIZE => $size_value,
+                ...$productAttributes
+            ];
+        });
+        $product->{SIZES}()->delete();
+        $product->{SIZES}()->createMany($sizesValues);
+    }
+}

@@ -1,0 +1,59 @@
+<tr id="row_{{$address->id}}">
+    @checkRow($address->id)
+    @loopIteration()
+    <td class="truncate lh-lg">
+        {{ $address->{ADDRESS1} }}
+    </td>
+    <td class="truncate lh-lg">
+        <i>{{$address->{ADDRESS2} ?? 'No Address line 2'}}</i>
+    </td>
+    <td>
+        <p>{{ $address->{COUNTRY} }}</p>
+    </td>
+    <td>
+        <p>{{ $address->{CITY} }}</p>
+    </td>
+    <td>
+        <p><i>{{$address->{STATE} ?? 'No '.STATE}}</i></p>
+    </td>
+    <td>
+        <p>{{ $address->{PHONE} }}</p>
+    </td>
+    <td>
+        <p>{{ $address->{POSTAL_CODE} }}</p>
+    </td>
+    <td>
+        <div class="d-flex justify-content-center align-items-center gap-3">
+            @if ($address->trashed())
+                <button type="button" role="button" title="{{capitalizeAll(RESTORE_ADDRESS)}}"
+                        data-tooltip="tooltip" data-mdb-placement="top"
+                        data-route="{{route(RESTORE_ADDRESS, $address->id)}}"
+                        data-name="{{ $address->{USER_MODEL}->{FULL_NAME} }}"
+                        data-main="{{route(isAdminRoute() ? ADMIN_USER_ADDRESSES_ROUTE : USER_ADDRESSES, [ID => request()?->input(ID), CONDITION => conditionRequest()])}}"
+                        class="restore-address-btn h-fit-content fs-5 text-success bg-transparent border-0">
+                    <x-actions.icon action="{{RESTORE}}"/>
+                </button>
+            @else
+                <button type="button" role="button" title="{{EDIT_ADDRESS_TITLE}}"
+                        data-tooltip="tooltip" data-mdb-placement="top"
+                        data-mdb-toggle="modal" data-mdb-target="#edit_address_modal"
+                        data-route="{{route(EDIT_ADDRESS, $address->id)}}"
+                        class="edit-address-btn h-fit-content fs-5 text-success bg-transparent border-0">
+                    <x-actions.icon action="{{EDIT}}"/>
+                </button>
+            @endif
+            <button type="button" role="button"
+                    title="{{capitalizeAll($address->trashed() ? DELETE_ADDRESS : REMOVE_ADDRESS)}}"
+                    data-tooltip="tooltip" data-mdb-placement="top"
+                    data-route="{{route(DELETE_ADDRESS, $address->id)}}"
+                    data-name="{{ $address->{USER_MODEL}->{FULL_NAME} }}"
+                    data-main="{{route(isAdminRoute() ? ADMIN_USER_ADDRESSES_ROUTE : USER_ADDRESSES, [ID => request()?->input(ID), CONDITION => conditionRequest()])}}"
+                    @class([
+                        'delete-address-btn' => (isAdminRoute() && !auth()->user()?->isMonitor) || (!isAdminRoute() && (auth()->user()?->isMonitor || !auth()->user()?->isMonitor)),
+                        'h-fit-content fs-5 text-danger bg-transparent border-0'
+                    ])>
+                <x-actions.icon action="{{$address->trashed() ? DELETE : REMOVE}}"/>
+            </button>
+        </div>
+    </td>
+</tr>

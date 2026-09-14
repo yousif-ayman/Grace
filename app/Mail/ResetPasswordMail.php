@@ -1,0 +1,46 @@
+<?php
+
+namespace App\Mail;
+
+use Illuminate\Bus\Queueable;
+use Illuminate\Mail\Mailable;
+use Illuminate\Mail\Mailables\Content;
+use Illuminate\Mail\Mailables\Envelope;
+use Illuminate\Queue\SerializesModels;
+
+class ResetPasswordMail extends Mailable
+{
+    use Queueable, SerializesModels;
+
+    /**
+     * Create a new message instance.
+     *
+     * @return void
+     */
+    final public function __construct(protected array $reset_password_data){}
+
+    /**
+     * Get the message envelope.
+     *
+     * @return Envelope
+     */
+    final public function envelope(): Envelope
+    {
+        return new Envelope(
+            subject: 'Reset Your Password of Your Grace Account',
+        );
+    }
+
+    /**
+     * Get the message content definition.
+     *
+     * @return Content
+     */
+    final public function content(): Content
+    {
+        return new Content(
+            markdown: emailView(RESET_PASSWORD),
+            with:     $this->reset_password_data,
+        );
+    }
+}
