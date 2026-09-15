@@ -19,7 +19,7 @@
                 <li role="listitem" class="top-date col d-flex justify-content-lg-center align-items-center">
                     {{\Carbon\Carbon::now()->format('l - d F Y')}}
                 </li>
-                <li role="listitem" class="top-wishlist col d-lg-flex d-sm-none justify-content-end align-items-center">
+                <li role="listitem" class="top-wishlist col justify-content-end align-items-center">
                     <a href="{{route(WISHLIST_MODEL)}}" role="link">
                         <i class="fa-solid fa-heart me-1"></i>
                         <span>{{ucfirst(WISHLIST_MODEL)}}</span>
