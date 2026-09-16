@@ -1,8 +1,8 @@
 <?php
 
 use App\Http\Controllers\DocumentationController;
-use Illuminate\Support\Facades\Route,
-    Illuminate\Support\Facades\Artisan,
+use Illuminate\Support\Facades\Artisan,
+    Illuminate\Support\Facades\Route,
     App\Http\Controllers\CategoryController,
     App\Http\Controllers\SubcategoryController,
     App\Http\Controllers\ProductController,
