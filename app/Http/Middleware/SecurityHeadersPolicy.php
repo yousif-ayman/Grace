@@ -55,7 +55,7 @@ class SecurityHeadersPolicy
         // $response->headers->set('Cross-Origin-Embedder-Policy', 'require-corp');
 
         // Cross-Origin-Embedder-Policy (credentialless) - Protects against cross-origin attacks without breaking third-party resources (CDNs, iframes, widgets)
-        // $response->headers->set('Cross-Origin-Embedder-Policy', 'credentialless');
+        $response->headers->set('Cross-Origin-Embedder-Policy', 'credentialless');
 
         // X-Content-Type-Options - Prevents browsers from MIME-type sniffing
         $response->headers->set('X-Content-Type-Options', 'nosniff');
