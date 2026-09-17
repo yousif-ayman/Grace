@@ -19,7 +19,7 @@ return new class extends Migration
             $table->string(FIRST_NAME, 50);
             $table->string(LAST_NAME, 50);
             $table->string(EMAIL)->unique();
-            $table->timestamp(EMAIL.'_verified_at');
+            $table->timestamp(EMAIL.'_verified_at')->nullable();
             $table->string(PASSWORD);
             $table->boolean(ROLE)->default(0); // 0 --> user (customer), 1 --> admin, 2 --> monitor
             $login_social_providers = LOGIN_SOCIAL_PROVIDERS;
