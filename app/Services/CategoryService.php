@@ -183,20 +183,22 @@ class CategoryService implements ServiceData
      */
     private function deleteRelatedCollectionItems(Category $category, string $modelClass): void
     {
+        $categories_ids = selectedIdsRequest($category);
+
         $modelClass::query()
             ->whereHas(CATEGORIES_TABLE, static fn(Builder $query) =>
-                $query->whereIn(ID, selectedIdsRequest($category))->onlyTrashed()
+                $query->whereIn(ID, $categories_ids)->onlyTrashed()
             )
             ->with([CATEGORIES_TABLE => static fn(Builder $query) => $query->withTrashed()])
             ->cursor()
-            ->each(function (Model|stdClass $related_collection_item) use ($category_ids, $modelClass) {
+            ->each(function (Model|stdClass $related_collection_item) use ($categories_ids, $modelClass) {
                 $related_category_ids = $related_collection_item->{CATEGORIES_TABLE}
                     ->pluck(ID);
 
                 // If the item still has other categories attached -> detach only
-                if ($related_category_ids->diff($category_ids)->isNotEmpty()) {
+                if ($related_category_ids->diff($categories_ids)->isNotEmpty()) {
                     return $related_collection_item->{CATEGORIES_TABLE}()
-                        ->detach($category_ids);
+                        ->detach($categories_ids);
                 }
 
                 $this->deleteRelatedCollectionImages($related_collection_item, $modelClass);
