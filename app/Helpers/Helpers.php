@@ -418,9 +418,10 @@ if (!function_exists('imageSource')) {
      *
      * @param Model|stdClass|string $modelOrImageName
      * @param string|null $imageType
+     * @param bool $forDeletePath
      * @return string
      */
-    function imageSource(Model|stdClass|string $modelOrImageName, ?string $imageType = null): string
+    function imageSource(Model|stdClass|string $modelOrImageName, ?string $imageType = null, bool $forDeletePath = false): string
     {
         $image_path = "images/";
 
@@ -441,7 +442,9 @@ if (!function_exists('imageSource')) {
 
         $image_path .= DIRECTORY_SEPARATOR.pluralize($imageType).DIRECTORY_SEPARATOR.$image_name;
 
-        return Storage::disk('public')->url($image_path);
+        return $forDeletePath
+            ? "public".DIRECTORY_SEPARATOR.$image_path
+            : asset(Storage::url($image_path));
     }
 }
 
@@ -545,13 +548,13 @@ if (!function_exists('collectImagesTo'.ucfirst(DELETE))) {
             ->flatMap(static function (array $property, string $imageType) use ($model) {
                 // Column image (single)
                 if (($property['type'] === 'column') && !empty($model->{$imageType})) {
-                    return [imageSource($model, $imageType)];
+                    return [imageSource($model, $imageType, true)];
                 }
 
                 // Relation images (multiple)
                 if (($property['type'] === 'relation') && $model->relationLoaded($imageType)) {
                     return $model->{$imageType}
-                        ->map(static fn(Model|stdClass $img) => imageSource($img, $property['image_type'])
+                        ->map(static fn(Model|stdClass $img) => imageSource($img, $property['image_type'], true)
                         )
                         ->all();
                 }
