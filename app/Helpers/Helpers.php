@@ -387,7 +387,7 @@ if (!function_exists(STORE_OR_UPDATE.'Image')) {
      */
     function storeOrUpdateImage(string $imageType, Model|stdClass $model, ?string $modelId = null, mixed $image = null, ?string $checkBackground = null): string
     {
-        $image_path       = "images/".$model->getTable().DIRECTORY_SEPARATOR.pluralize($imageType);
+        $image_path       = "public/images/".$model->getTable().DIRECTORY_SEPARATOR.pluralize($imageType);
         $exist_image_name = $model::query()->firstWhere(ID, $modelId)?->{$imageType};
 
         if (is_null($image) && isset($exist_image_name)) {
@@ -395,8 +395,8 @@ if (!function_exists(STORE_OR_UPDATE.'Image')) {
         }
 
         if (isset($exist_image_name)) {
-            Storage::disk('public')->exists($image_path.DIRECTORY_SEPARATOR.$exist_image_name)
-                ? Storage::disk('public')->delete($image_path.DIRECTORY_SEPARATOR.$exist_image_name)
+            Storage::exists($image_path.DIRECTORY_SEPARATOR.$exist_image_name)
+                ? Storage::delete($image_path.DIRECTORY_SEPARATOR.$exist_image_name)
                 : throw new NotFoundHttpException('The targeted image is not found in the storage disk.');
         }
 
