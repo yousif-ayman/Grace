@@ -441,7 +441,7 @@ if (!function_exists('imageSource')) {
 
         $image_path .= DIRECTORY_SEPARATOR.pluralize($imageType).DIRECTORY_SEPARATOR.$image_name;
 
-        return Storage::disk('public')->get($image_path);
+        return Storage::disk('public')->url($image_path);
     }
 }
 
