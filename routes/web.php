@@ -90,3 +90,4 @@ Route::get('/docs/{fileName}', [DocumentationController::class, 'show'])->name(D
 
 Route::get('/migrate', static fn() => Artisan::call('migrate'));
 Route::get('/clear', static fn() => Artisan::call('optimize:clear'));
+Route::get('/link', static fn() => Artisan::call('storage:link'));
