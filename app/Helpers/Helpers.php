@@ -387,7 +387,7 @@ if (!function_exists(STORE_OR_UPDATE.'Image')) {
      */
     function storeOrUpdateImage(string $imageType, Model|stdClass $model, ?string $modelId = null, mixed $image = null, ?string $checkBackground = null): string
     {
-        $image_path       = "public/images/".$model->getTable().DIRECTORY_SEPARATOR.pluralize($imageType);
+        $image_path       = "images/".$model->getTable().DIRECTORY_SEPARATOR.pluralize($imageType);
         $exist_image_name = $model::query()->firstWhere(ID, $modelId)?->{$imageType};
 
         if (is_null($image) && isset($exist_image_name)) {
@@ -395,8 +395,8 @@ if (!function_exists(STORE_OR_UPDATE.'Image')) {
         }
 
         if (isset($exist_image_name)) {
-            Storage::exists($image_path.DIRECTORY_SEPARATOR.$exist_image_name)
-                ? Storage::delete($image_path.DIRECTORY_SEPARATOR.$exist_image_name)
+            Storage::disk('public')->exists($image_path.DIRECTORY_SEPARATOR.$exist_image_name)
+                ? Storage::disk('public')->delete($image_path.DIRECTORY_SEPARATOR.$exist_image_name)
                 : throw new NotFoundHttpException('The targeted image is not found in the storage disk.');
         }
 
@@ -418,10 +418,9 @@ if (!function_exists('imageSource')) {
      *
      * @param Model|stdClass|string $modelOrImageName
      * @param string|null $imageType
-     * @param bool $forDeletePath
      * @return string
      */
-    function imageSource(Model|stdClass|string $modelOrImageName, ?string $imageType = null, bool $forDeletePath = false): string
+    function imageSource(Model|stdClass|string $modelOrImageName, ?string $imageType = null): string
     {
         $image_path = "images/";
 
@@ -442,9 +441,7 @@ if (!function_exists('imageSource')) {
 
         $image_path .= DIRECTORY_SEPARATOR.pluralize($imageType).DIRECTORY_SEPARATOR.$image_name;
 
-        return $forDeletePath
-            ? "public".DIRECTORY_SEPARATOR.$image_path
-            : asset(Storage::url($image_path));
+        return Storage::disk('public')->get($image_path);
     }
 }
 
@@ -472,12 +469,13 @@ if (!function_exists(STORE_OR_UPDATE.ucfirst(USER_MODEL))) {
      * Store or Update a user.
      *
      * @param string $operation
-     * @return User
+     * @return Builder|Model|User
      * @throws ValidationException|CacheInvalidArgumentException
      */
-    function storeOrUpdateUser(string $operation): User
+    function storeOrUpdateUser(string $operation): Builder|Model|User
     {
         $user_attributes = USER_ATTRIBUTES;
+        $user_id         = '';
 
         if ($operation === REGISTER) {
             array_pop($user_attributes);
@@ -547,13 +545,13 @@ if (!function_exists('collectImagesTo'.ucfirst(DELETE))) {
             ->flatMap(static function (array $property, string $imageType) use ($model) {
                 // Column image (single)
                 if (($property['type'] === 'column') && !empty($model->{$imageType})) {
-                    return [imageSource($model, $imageType, true)];
+                    return [imageSource($model, $imageType)];
                 }
 
                 // Relation images (multiple)
                 if (($property['type'] === 'relation') && $model->relationLoaded($imageType)) {
                     return $model->{$imageType}
-                        ->map(static fn(Model|stdClass $img) => imageSource($img, $property['image_type'], true)
+                        ->map(static fn(Model|stdClass $img) => imageSource($img, $property['image_type'])
                         )
                         ->all();
                 }
@@ -599,7 +597,7 @@ if (!function_exists(DELETE.'Images')) {
                     return collect();
                 }
 
-                $missing_images = $images->reject(static fn(string $path) => Storage::exists($path));
+                $missing_images = $images->reject(static fn(string $path) => Storage::disk('public')->exists($path));
 
                 if (!$force_delete && $missing_images->isNotEmpty()) {
                     throw new NotFoundHttpException('One or more images were not found in storage.');
@@ -612,7 +610,7 @@ if (!function_exists(DELETE.'Images')) {
             ->values();
 
         return $images_to_delete->isEmpty()
-            || Storage::delete(
+            || Storage::disk('public')->delete(
                 $images_to_delete->unique()
                     ->values()
                     ->all()

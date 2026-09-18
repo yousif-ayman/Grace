@@ -216,13 +216,13 @@ class CategoryService implements ServiceData
      */
     private function deleteRelatedCollectionImages(Model|stdClass $related_collection_item, string $modelClass): void
     {
-        $images_paths = [imageSource($related_collection_item, MAIN_IMAGE, true)];
+        $images_paths = [imageSource($related_collection_item, MAIN_IMAGE)];
 
         if ($modelClass === Product::class) {
             $images_paths = array_merge(
                 $images_paths,
                 $related_collection_item->{THUMB_IMAGES}->map(static fn(ThumbImage $thumb_image) =>
-                    imageSource($thumb_image, THUMB_IMAGE, true)
+                    imageSource($thumb_image, THUMB_IMAGE)
                 )->toArray()
             );
         }
