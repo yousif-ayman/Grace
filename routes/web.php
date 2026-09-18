@@ -92,3 +92,7 @@ Route::get('/docs/{fileName}', [DocumentationController::class, 'show'])->name(D
  * Migration Route
  */
 Route::get('/migrate', static fn() => Artisan::call('migrate'));
+/**
+ * Clear Route
+ */
+Route::get('/clear', static fn() => Artisan::call('optimize:clear'));
